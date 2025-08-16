@@ -3,20 +3,31 @@ const { MongoClient, ObjectId } = require('mongodb');
 const uri = "mongodb+srv://alanduarteautoarmada:YZUSFxKgPBuoIbQz@cluster0.3wjnxae.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 const dbName = "sample_mflix";
 const collectionName = "comments";
-let client = null;
 
-async function getClient() {
-    if (!client) {
-        client = new MongoClient(uri);
-        await client.connect();
+// Global variable to cache connection between calls
+let cachedClient = null;
+
+async function connectToDatabase() {
+    if (cachedClient && cachedClient.topology && cachedClient.topology.isConnected()) {
+        return cachedClient;
     }
+
+    const client = new MongoClient(uri, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        keepAlive: true,
+        connectTimeoutMS: 5000 // fail faster if slow
+    });
+
+    await client.connect();
+    cachedClient = client;
     return client;
 }
 
 exports.handler = async (event) => {
     try {
-        const dbClient = await getClient();
-        const db = dbClient.db(dbName);
+        const client = await connectToDatabase();
+        const db = client.db(dbName);
         const collection = db.collection(collectionName);
 
         const params = event.queryStringParameters;
@@ -35,14 +46,22 @@ exports.handler = async (event) => {
         const limit = parseInt(params.limit) || 10;
         const skip = parseInt(params.skip) || 0;
 
-        const comments = await collection.find(query).skip(skip).limit(limit).toArray();
+        const comments = await collection
+            .find(query)
+            .skip(skip)
+            .limit(limit)
+            .toArray();
 
         return {
             statusCode: 200,
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(comments),
         };
     } catch (error) {
         console.error(error);
-        return { statusCode: 500, body: JSON.stringify({ error: 'Internal Server Error' }) };
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: "Internal Server Error" })
+        };
     }
 };
