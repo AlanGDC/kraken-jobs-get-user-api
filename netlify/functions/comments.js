@@ -7,13 +7,10 @@ const collectionName = "comments";
 let cachedClient = null;
 
 async function connectToDatabase() {
-    if (cachedClient && cachedClient.topology && cachedClient.topology.isConnected()) {
+    if (cachedClient) {
         return cachedClient;
     }
     const client = new MongoClient(uri, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        keepAlive: true,
         connectTimeoutMS: 5000
     });
     await client.connect();
